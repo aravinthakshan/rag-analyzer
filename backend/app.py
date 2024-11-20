@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, HTTPException
+from fastapi import FastAPI, UploadFile, HTTPException, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
@@ -7,7 +7,7 @@ import docx
 import io
 import os
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI  # Updated import
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
@@ -144,6 +144,49 @@ async def upload_file(file: UploadFile, query: Optional[str] = None, category: O
         return {
             "result": analysis,
             "extracted_text": text
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/analyze_multiple")
+async def analyze_multiple_documents(
+    files: List[UploadFile] = File(...), 
+    query: Optional[str] = None, 
+    category: Optional[str] = "summary"
+):
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+
+    try:
+        # Extract text from all documents
+        documents_text = []
+        for file in files:
+            content = await file.read()
+            
+            if file.content_type == "application/pdf":
+                text = extract_text_from_pdf(content)
+            elif file.content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+                text = extract_text_from_docx(content)
+            elif file.content_type == "text/plain":
+                text = content.decode('utf-8')
+            else:
+                raise HTTPException(status_code=400, detail=f"Unsupported file type: {file.content_type}")
+            
+            documents_text.append(text)
+        
+        # Combine all documents' text
+        combined_text = "\n\n---Document Separator---\n\n".join(documents_text)
+        
+        # Analyze using RAG
+        analysis = await analyze_with_rag(
+            combined_text,
+            query or "Comprehensively analyze these documents, highlighting key insights across them",
+            category
+        )
+        
+        return {
+            "result": analysis,
+            "document_count": len(files)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
