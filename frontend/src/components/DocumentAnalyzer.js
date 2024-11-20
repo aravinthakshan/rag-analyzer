@@ -3,8 +3,6 @@ import { useDropzone } from "react-dropzone";
 import ReactMarkdown from 'react-markdown';
 import { Upload, FileText, Loader2 } from 'lucide-react';
 
-// make sure this doesnt change 
-
 const BACKEND_URL = "http://localhost:8000";
 
 const DocumentAnalyzer = () => {
@@ -18,7 +16,6 @@ const DocumentAnalyzer = () => {
   const [error, setError] = useState("");
   const [isBackendAvailable, setIsBackendAvailable] = useState(false);
   const [isSelectOpen, setIsSelectOpen] = useState(false);
-  const [showWarning, setShowWarning] = useState(false);
 
   useEffect(() => {
     checkBackendHealth();
@@ -54,7 +51,7 @@ const DocumentAnalyzer = () => {
 
       const formData = new FormData();
       formData.append("file", uploadedFile);
-      formData.append("query", customQuery.trim() || "");
+      formData.append("query", customQuery.trim() || "Analyze the document");
       formData.append("category", analysisCategory);
 
       const response = await fetch(`${BACKEND_URL}/upload`, {
@@ -88,9 +85,9 @@ const DocumentAnalyzer = () => {
       const response = await fetch(`${BACKEND_URL}/analyze_text`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text,
-          query: customQuery.trim() || "",
+        body: JSON.stringify({ 
+          text, 
+          query: customQuery.trim() || "Analyze this text and provide key insights",
           category: analysisCategory
         }),
       });
@@ -118,18 +115,21 @@ const DocumentAnalyzer = () => {
     setError("");
   }
 
-  function handleUploadClick() {
-    if (!file) {
-      setShowWarning(true);
-    }
-  }
-
+  // Handling the analysis category dropdown
   const handleCategoryChange = (category) => {
     setAnalysisCategory(category);
     setIsSelectOpen(false);
   };
 
-  const handleCloseWarning = () => setShowWarning(false);
+  // Warn if no document is uploaded and user tries to switch to text input mode
+  const handleUploadButtonClick = () => {
+    if (!file && !isTextInput) {
+      setError("Please upload a document before proceeding!");
+      return;
+    }
+    setError(""); // Clear error if everything is fine
+    setIsTextInput(false); // Switch to text input mode
+  };
 
   if (!isBackendAvailable) {
     return (
@@ -147,59 +147,26 @@ const DocumentAnalyzer = () => {
     <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-lg">
       <div className="p-6">
         <h2 className="text-2xl font-bold mb-6">Document Analyzer</h2>
-
-        {/* Upload Document Section */}
-        <div
-          {...getRootProps()}
-          className="border-2 border-dashed rounded-lg p-8 text-center transition-colors hover:border-blue-500 cursor-pointer"
-        >
-          <input {...getInputProps()} />
-          {isLoading ? (
-            <div className="flex flex-col items-center space-y-2">
-              <Loader2 className="w-6 h-6 animate-spin" />
-              <p className="text-gray-500">Processing file...</p>
-            </div>
-          ) : (
-            <>
-              <Upload className="w-8 h-8 mx-auto mb-4 text-gray-400" />
-              <p className="text-lg mb-2">Drop your file here, or click to select</p>
-              <p className="text-sm text-gray-500">
-                Supported formats: PDF, DOCX, TXT
-              </p>
-            </>
-          )}
-        </div>
-
-        {/* Document Upload Warning */}
-        {showWarning && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-yellow-600">
-            Please upload a document before proceeding.
-            <button
-              onClick={handleCloseWarning}
-              className="ml-4 text-blue-600 hover:text-blue-700"
-            >
-              Close
-            </button>
-          </div>
-        )}
-
-        <div className="space-y-6 mt-6">
+        
+        <div className="space-y-6">
+          {/* File Upload or Text Input Toggle */}
           <div className="flex space-x-4">
             <button
               className={`px-4 py-2 rounded-lg flex items-center ${
-                !isTextInput
-                  ? "bg-blue-600 text-white"
+                !isTextInput 
+                  ? "bg-blue-600 text-white" 
                   : "bg-gray-100 text-gray-700"
               }`}
               onClick={() => handleInputMethodChange("file")}
+              disabled={isTextInput}
             >
               <Upload className="w-4 h-4 mr-2" />
               Upload Document
             </button>
             <button
               className={`px-4 py-2 rounded-lg flex items-center ${
-                isTextInput
-                  ? "bg-blue-600 text-white"
+                isTextInput 
+                  ? "bg-blue-600 text-white" 
                   : "bg-gray-100 text-gray-700"
               }`}
               onClick={() => handleInputMethodChange("text")}
@@ -215,63 +182,101 @@ const DocumentAnalyzer = () => {
             </div>
           )}
 
-          <div className="space-y-4">
-            {/* Analysis Category Dropdown */}
-            <div className="relative">
-              <label className="block font-medium mb-2">Analysis Category</label>
-              <div className="relative">
-                <button
-                  className="w-full px-4 py-2 text-left bg-white border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  onClick={() => setIsSelectOpen((prev) => !prev)}
-                >
-                  {analysisCategory.charAt(0).toUpperCase() + analysisCategory.slice(1)}
-                </button>
-                {isSelectOpen && (
-                  <div className="absolute w-full mt-1 bg-white border rounded-lg shadow-lg z-10">
-                    {["summary", "sentiment", "keywords", "entity-recognition"].map((category) => (
-                      <button
-                        key={category}
-                        className="w-full px-4 py-2 text-left hover:bg-gray-100"
-                        onClick={() => handleCategoryChange(category)}
-                      >
-                        {category.charAt(0).toUpperCase() + category.slice(1)}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+          {/* Upload Document Section */}
+          {!isTextInput && (
+            <div
+              {...getRootProps()}
+              className="border-2 border-dashed rounded-lg p-8 text-center transition-colors hover:border-blue-500 cursor-pointer"
+            >
+              <input {...getInputProps()} />
+              {isLoading ? (
+                <div className="flex flex-col items-center space-y-2">
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                  <p className="text-gray-500">Processing file...</p>
+                </div>
+              ) : (
+                <>
+                  <Upload className="w-8 h-8 mx-auto mb-4 text-gray-400" />
+                  <p className="text-lg mb-2">Drop your file here, or click to select</p>
+                  <p className="text-sm text-gray-500">
+                    Supported formats: PDF, DOCX, TXT
+                  </p>
+                </>
+              )}
             </div>
+          )}
 
-            {/* Text Input Area */}
-            {isTextInput && (
-              <div>
-                <label className="block font-medium mb-2">Enter Text for Analysis</label>
-                <textarea
-                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows={6}
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder="Paste your document text here"
-                />
-              </div>
-            )}
-
-            {/* Submit Button */}
-            <div className="flex justify-end space-x-4">
+          {/* Analysis Category Dropdown */}
+          <div className="relative">
+            <label className="block font-medium mb-2">Analysis Category</label>
+            <div className="relative">
               <button
-                className="px-4 py-2 rounded-lg bg-green-600 text-white"
-                onClick={isTextInput ? handleTextSubmit : handleUploadClick}
+                className="w-full px-4 py-2 text-left bg-white border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onClick={() => setIsSelectOpen(!isSelectOpen)}
               >
-                Submit
+                {analysisCategory.charAt(0).toUpperCase() + analysisCategory.slice(1)}
               </button>
+              {isSelectOpen && (
+                <div className="absolute w-full mt-1 bg-white border rounded-lg shadow-lg z-10">
+                  {["summary", "sentiment", "keywords", "entity-recognition"].map((category) => (
+                    <button
+                      key={category}
+                      className="w-full px-4 py-2 text-left hover:bg-gray-100"
+                      onClick={() => handleCategoryChange(category)}
+                    >
+                      {category.charAt(0).toUpperCase() + category.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Analysis Results */}
+          {/* Custom Query */}
+          <div>
+            <label className="block font-medium mb-2">Custom Query (Optional)</label>
+            <input
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter specific analysis question..."
+              value={customQuery}
+              onChange={(e) => setCustomQuery(e.target.value)}
+            />
+          </div>
+
+          {/* Handle Text Input or File Upload */}
+          {isTextInput ? (
+            <>
+              <textarea
+                className="w-full min-h-[200px] px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Paste your text here"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+              />
+              <button
+                onClick={handleTextSubmit}
+                className="mt-4 w-full bg-blue-600 text-white py-2 rounded-lg"
+                disabled={isLoading || !text.trim()}
+              >
+                Analyze Text
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={handleUploadButtonClick}
+                className="w-full bg-blue-600 text-white py-2 rounded-lg mt-4"
+                disabled={isLoading || !file}
+              >
+                Upload and Analyze
+              </button>
+            </>
+          )}
+
+          {/* Displaying Analysis Results */}
           {analysisResult && (
-            <div className="mt-8">
-              <h3 className="text-xl font-semibold mb-4">Analysis Results</h3>
-              <ReactMarkdown>{analysisResult}</ReactMarkdown>
+            <div className="mt-6 bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-xl font-semibold mb-4">Analysis Result</h3>
+              <ReactMarkdown className="prose">{analysisResult}</ReactMarkdown>
             </div>
           )}
         </div>
