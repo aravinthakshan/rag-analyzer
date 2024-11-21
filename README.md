@@ -1,6 +1,6 @@
-# **Document Analyzer**
+# **Document and Text Analyzer**
 
-A document analysis application using **FastAPI** (backend) and **React** (frontend) to process and analyze text from documents or user input, powered by **Google Gemini AI** and **LangChain**.
+A document analysis application using **FastAPI** (backend) and **React** (frontend) to process and analyze text from documents, or just free form large corpus of texr or user inputs, powered by **Google Gemini AI** and **LangChain**.
 
 ### Original UI
 
