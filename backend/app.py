@@ -21,11 +21,9 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise EnvironmentError("GEMINI_API_KEY not found in .env file")
 
-# Initialize LangChain's Gemini integration
 llm = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=GEMINI_API_KEY)
 embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 
-# Initialize FastAPI app
 app = FastAPI()
 
 # Configure CORS
@@ -74,14 +72,11 @@ def extract_text_from_docx(content: bytes) -> str:
 
 async def analyze_with_rag(text: str, query: str, category: str) -> str:
     try:
-        # Split text into chunks
         text_splitter = create_text_splitter()
         texts = text_splitter.split_text(text)
         
-        # Create vector store
         vector_store = create_vector_store(texts)
         
-        # Create retriever with contextual compression
         base_retriever = vector_store.as_retriever(search_type="mmr", search_kwargs={"k": 5})
         compressor = LLMChainExtractor.from_llm(llm)
         compression_retriever = ContextualCompressionRetriever(
@@ -89,11 +84,9 @@ async def analyze_with_rag(text: str, query: str, category: str) -> str:
             base_compressor=compressor
         )
         
-        # Retrieve relevant context
         retrieved_docs = compression_retriever.get_relevant_documents(query)
         context = "\n\n".join([doc.page_content for doc in retrieved_docs])
         
-        # Define category-specific prompts
         category_prompts = {
             "summary": "Provide a comprehensive summary of the following text, highlighting the main points and key takeaways:",
             "sentiment": "Analyze the sentiment and emotional tone of the following text, providing specific examples:",
@@ -101,14 +94,13 @@ async def analyze_with_rag(text: str, query: str, category: str) -> str:
             "entity-recognition": "Identify and categorize important entities (people, organizations, locations, etc.) from the following text:"
         }
         
-        # Use custom query if provided, otherwise use category-based prompt
         if query.strip():
+            # print("Inside Custom !")
             full_prompt = f"{query}\n\nContext: {context}\n\nOriginal Text: {text}"
         else:
             base_prompt = category_prompts.get(category, category_prompts["summary"])
             full_prompt = f"{base_prompt}\n\nContext: {context}\n\nOriginal Text: {text}"
         
-        # Generate response
         response = await llm.ainvoke(full_prompt)
         return response.content
         
@@ -131,7 +123,6 @@ async def upload_file(
     try:
         content = await file.read()
         
-        # Extract text based on file type
         if file.content_type == "application/pdf":
             text = extract_text_from_pdf(content)
         elif file.content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
@@ -141,7 +132,6 @@ async def upload_file(
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported file type: {file.content_type}")
         
-        # Use query if provided, otherwise use category-based analysis
         analysis = await analyze_with_rag(
             text,
             query if query and query.strip() else "",
@@ -165,7 +155,6 @@ async def analyze_multiple_documents(
         raise HTTPException(status_code=400, detail="No files uploaded")
 
     try:
-        # Extract text from all documents
         documents_text = []
         for file in files:
             content = await file.read()
@@ -181,16 +170,13 @@ async def analyze_multiple_documents(
             
             documents_text.append(text)
         
-        # Combine all documents' text
         combined_text = "\n\n---Document Separator---\n\n".join(documents_text)
-        
-        # Use query if provided, otherwise use category-based analysis
+
         analysis = await analyze_with_rag(
             combined_text,
             query if query and query.strip() else "",
             category
         )
-        
         return {
             "result": analysis,
             "document_count": len(files)
