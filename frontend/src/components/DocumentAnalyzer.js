@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useDropzone } from "react-dropzone";
 import ReactMarkdown from 'react-markdown';
 import { Upload, FileText, Loader2, X } from 'lucide-react';
@@ -15,7 +15,6 @@ const DocumentAnalyzer = () => {
   const [isTextInput, setIsTextInput] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const [isBackendAvailable, setIsBackendAvailable] = useState(false);
 
   const { getRootProps, getInputProps } = useDropzone({
     onDrop: handleFileDrop,
@@ -28,22 +27,56 @@ const DocumentAnalyzer = () => {
   });
 
   async function handleFileDrop(acceptedFiles) {
-    const newFiles = [...files, ...acceptedFiles];
-    setFiles(newFiles);
+    setFiles(prev => [...prev, ...acceptedFiles]);
   }
 
   const removeFile = (fileToRemove) => {
     setFiles(files.filter(file => file !== fileToRemove));
   };
 
-  async function handleAnalysis() {
+  async function handleTextAnalysis() {
+    try {
+      setIsLoading(true);
+      setError("");
+
+      const response = await fetch(`${BACKEND_URL}/analyze_text`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: text.trim(),
+          query: customQuery.trim(),
+          category: analysisCategory
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Analysis failed: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      setAnalysisResult(data.result);
+    } catch (error) {
+      setError(`Error analyzing text: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleDocumentAnalysis() {
     try {
       setIsLoading(true);
       setError("");
 
       const formData = new FormData();
       files.forEach(file => formData.append("files", file));
-      formData.append("query", customQuery.trim() || "Analyze these documents comprehensively");
+      
+      // Only append query if it's not empty
+      if (customQuery.trim()) {
+        formData.append("query", customQuery.trim());
+      }
       formData.append("category", analysisCategory);
 
       const response = await fetch(`${BACKEND_URL}/analyze_multiple`, {
@@ -65,6 +98,14 @@ const DocumentAnalyzer = () => {
     }
   }
 
+  const handleAnalysis = () => {
+    if (isTextInput) {
+      handleTextAnalysis();
+    } else {
+      handleDocumentAnalysis();
+    }
+  };
+
   return (
     <Layout>
       <div className="max-w-4xl mx-auto bg-gray-800 rounded-lg shadow-lg p-6">
@@ -76,7 +117,10 @@ const DocumentAnalyzer = () => {
                   ? "bg-blue-600 text-white" 
                   : "bg-gray-700 text-gray-300"
               }`}
-              onClick={() => setIsTextInput(false)}
+              onClick={() => {
+                setIsTextInput(false);
+                setText("");
+              }}
             >
               <Upload className="w-4 h-4 mr-2" />
               Upload Documents
@@ -87,7 +131,10 @@ const DocumentAnalyzer = () => {
                   ? "bg-blue-600 text-white" 
                   : "bg-gray-700 text-gray-300"
               }`}
-              onClick={() => setIsTextInput(true)}
+              onClick={() => {
+                setIsTextInput(true);
+                setFiles([]);
+              }}
             >
               <FileText className="w-4 h-4 mr-2" />
               Enter Text
@@ -137,13 +184,19 @@ const DocumentAnalyzer = () => {
             </div>
           )}
 
+          <div className="space-y-4"></div>
+
+
           <div className="space-y-4">
             <div>
-              <label className="block font-medium mb-2 text-gray-300">Analysis Category</label>
+              <label className="block font-medium mb-2 text-gray-300">
+                Analysis Category {customQuery.trim() && "(Ignored when custom query is provided)"}
+              </label>
               <select
                 className="w-full px-4 py-2 bg-gray-700 text-gray-100 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={analysisCategory}
                 onChange={(e) => setAnalysisCategory(e.target.value)}
+                disabled={customQuery.trim().length > 0}
               >
                 {["summary", "sentiment", "keywords", "entity-recognition"].map(category => (
                   <option key={category} value={category}>
@@ -154,18 +207,24 @@ const DocumentAnalyzer = () => {
             </div>
 
             <div>
-              <label className="block font-medium mb-2 text-gray-300">Custom Query (Optional)</label>
+              <label className="block font-medium mb-2 text-gray-300">Custom Query</label>
               <input
                 className="w-full px-4 py-2 bg-gray-700 text-gray-100 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter specific analysis question..."
+                placeholder="Enter your specific analysis question..."
                 value={customQuery}
                 onChange={(e) => setCustomQuery(e.target.value)}
               />
             </div>
 
+            {error && (
+              <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-2 rounded-lg">
+                {error}
+              </div>
+            )}
+
             <button
               onClick={handleAnalysis}
-              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition"
+              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={isLoading || (files.length === 0 && !text.trim())}
             >
               {isLoading ? (
@@ -181,7 +240,9 @@ const DocumentAnalyzer = () => {
             {analysisResult && (
               <div className="mt-6 bg-gray-700 p-4 rounded-lg">
                 <h3 className="text-xl font-semibold mb-4 text-gray-100">Analysis Result</h3>
-                <ReactMarkdown className="prose prose-invert">{analysisResult}</ReactMarkdown>
+                <div className="prose prose-invert max-w-none">
+                  <ReactMarkdown>{analysisResult}</ReactMarkdown>
+                </div>
               </div>
             )}
           </div>

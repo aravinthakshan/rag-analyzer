@@ -83,7 +83,7 @@ async def analyze_with_rag(text: str, query: str, category: str) -> str:
         
         # Create retriever with contextual compression
         base_retriever = vector_store.as_retriever(search_type="mmr", search_kwargs={"k": 5})
-        compressor = LLMChainExtractor.from_llm(llm)  # Using LangChain's Gemini integration
+        compressor = LLMChainExtractor.from_llm(llm)
         compression_retriever = ContextualCompressionRetriever(
             base_retriever=base_retriever,
             base_compressor=compressor
@@ -93,7 +93,7 @@ async def analyze_with_rag(text: str, query: str, category: str) -> str:
         retrieved_docs = compression_retriever.get_relevant_documents(query)
         context = "\n\n".join([doc.page_content for doc in retrieved_docs])
         
-        # Generate category-specific prompts
+        # Define category-specific prompts
         category_prompts = {
             "summary": "Provide a comprehensive summary of the following text, highlighting the main points and key takeaways:",
             "sentiment": "Analyze the sentiment and emotional tone of the following text, providing specific examples:",
@@ -101,11 +101,14 @@ async def analyze_with_rag(text: str, query: str, category: str) -> str:
             "entity-recognition": "Identify and categorize important entities (people, organizations, locations, etc.) from the following text:"
         }
         
-        # Combine category prompt with custom query
-        base_prompt = category_prompts.get(category, category_prompts["summary"])
-        full_prompt = f"{base_prompt}\n\nCustom Query: {query}\n\nContext: {context}\n\nOriginal Text: {text}"
+        # Use custom query if provided, otherwise use category-based prompt
+        if query.strip():
+            full_prompt = f"{query}\n\nContext: {context}\n\nOriginal Text: {text}"
+        else:
+            base_prompt = category_prompts.get(category, category_prompts["summary"])
+            full_prompt = f"{base_prompt}\n\nContext: {context}\n\nOriginal Text: {text}"
         
-        # Generate response using LangChain's Gemini integration
+        # Generate response
         response = await llm.ainvoke(full_prompt)
         return response.content
         
@@ -117,7 +120,11 @@ async def health_check():
     return {"status": "healthy"}
 
 @app.post("/upload")
-async def upload_file(file: UploadFile, query: Optional[str] = None, category: Optional[str] = "summary"):
+async def upload_file(
+    file: UploadFile, 
+    query: Optional[str] = None, 
+    category: Optional[str] = "summary"
+):
     if not file:
         raise HTTPException(status_code=400, detail="No file uploaded")
 
@@ -134,10 +141,10 @@ async def upload_file(file: UploadFile, query: Optional[str] = None, category: O
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported file type: {file.content_type}")
         
-        # Analyze using RAG
+        # Use query if provided, otherwise use category-based analysis
         analysis = await analyze_with_rag(
             text,
-            query or "Analyze the document and provide key insights",
+            query if query and query.strip() else "",
             category
         )
         
@@ -177,10 +184,10 @@ async def analyze_multiple_documents(
         # Combine all documents' text
         combined_text = "\n\n---Document Separator---\n\n".join(documents_text)
         
-        # Analyze using RAG
+        # Use query if provided, otherwise use category-based analysis
         analysis = await analyze_with_rag(
             combined_text,
-            query or "Comprehensively analyze these documents, highlighting key insights across them",
+            query if query and query.strip() else "",
             category
         )
         
@@ -199,7 +206,7 @@ async def analyze_text(request: TextAnalysisRequest):
     try:
         analysis = await analyze_with_rag(
             request.text,
-            request.query or "Analyze this text and provide key insights",
+            request.query if request.query and request.query.strip() else "",
             request.category
         )
         return {"result": analysis}
